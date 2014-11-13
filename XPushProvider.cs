@@ -16,13 +16,14 @@ using System.Net.Sockets;
 using Tobe_LOG;
 
 /// <summary>
-/// XPushProvider 클래스
-/// 유종원
-/// 14. 11. 13
+/// XPushProvider
+/// 
 /// </summary>
 public class XPushProvider
 {
-    Encoding exASCIIENC;
+    // 확장아스키코드사용
+    Encoding exASCIIENC = Encoding.GetEncoding(28591);
+
     IPEndPoint serverAddress;
     Socket providerSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
     ActLog comActLog = new ActLog();
@@ -33,22 +34,17 @@ public class XPushProvider
     private string id = "id";
     private string pw = "pw";
 
-
-    
-
     public XPushProvider()
     {
         //
         // TODO: 여기에 생성자 논리를 추가합니다.
         //
+    }
 
-        // 확장아스키코드사용
-        exASCIIENC = Encoding.GetEncoding(28591);
-
-        string ipAddress = ConfigurationSettings.AppSettings["XPushProviderIP"].ToString();
-        int portNo = Convert.ToInt16(ConfigurationSettings.AppSettings["XPushProviderPort"].ToString());
-
-        serverAddress = new IPEndPoint(IPAddress.Parse(ipAddress), portNo);
+    public XPushProvider(string id, string pw)
+    {
+        this.id = id;
+        this.pw = pw;
     }
 
     private string getAuthMsg()
@@ -71,19 +67,21 @@ public class XPushProvider
     {
         try
         {
+            string ipAddress = ConfigurationSettings.AppSettings["XPushProviderIP"].ToString();
+            int portNo = Convert.ToInt16(ConfigurationSettings.AppSettings["XPushProviderPort"].ToString());
+            serverAddress = new IPEndPoint(IPAddress.Parse(ipAddress), portNo);
+
             // 소켓 연결
             providerSocket.Connect(serverAddress);
+            comActLog.LogWrite("[XPUSHPROVIDER:CONNECT]Connect");
         }
         catch (SocketException se)
         {
-            string strMessage = "[SocketException]" + se.Message;
-            comActLog.ExceptionLogWrite(strMessage);
-
+            comActLog.ExceptionLogWrite("[SocketException:CONNECT]" + se.Message);
         }
         catch (Exception e)
         {
-            string strMessage = "[Unexpected exception]" + e.Message;
-            comActLog.ExceptionLogWrite(strMessage);
+            comActLog.ExceptionLogWrite("[Unexpected exception:CONNECT]" + e.Message);
         }
     }
 
@@ -107,7 +105,7 @@ public class XPushProvider
             int iRec = providerSocket.Receive(recBytes);
             
             string recMsg = exASCIIENC.GetString(recBytes, 0, iRec);
-            comActLog.LogWrite("[XPUSHPROVIDER:RECEIVE]" + recMsg);
+            //comActLog.LogWrite("[XPUSHPROVIDER:RECEIVE]" + recMsg);
 
             return recMsg;
         }
@@ -131,49 +129,55 @@ public class XPushProvider
     private string sendAuth()
     {
         string authMsg = getAuthMsg();
-        comActLog.LogWrite("[XPUSHPROVIDER:SEND]" + authMsg);
+        comActLog.LogWrite("[XPUSHPROVIDER:SENDAUTH]" + authMsg);
 
         string recMsg = sendMsg(authMsg);
 
         return recMsg;
     }
 
-    private void sendPush(string type, string key, string value)
+    private string sendPush(string type, string key, string value)
     {
+        string pushMsg = getPushMsg(type, key, value);
+        comActLog.LogWrite("[XPUSHPROVIDER:SENDPUSH]" + pushMsg);
+
         string recMsg = sendMsg(getPushMsg(type, key, value));
-        comActLog.LogWrite("[XPUSHPROVIDER:SEND]" + getPushMsg(type, key, value));
+        
+        return recMsg;
     }
 
-    private void sendBye()
+    private string sendBye()
     {
         string byeMsg = "BYEC" + TERM_CODE;
         string size = ((byeMsg).Length).ToString().PadLeft(6, '0');
+        byeMsg = size + byeMsg;
 
-        sendMsg(byeMsg);
+        comActLog.LogWrite("[XPUSHPROVIDER:SENDBYEC]" + byeMsg);
+
+        string recMsg = sendMsg(byeMsg);
+
+        return recMsg;
     }
 
     public void connect()
     {
         connectSocket();
-        string ret = sendAuth();
 
-        if (ret.Substring(6, 2).Equals("OK"))
-        {
-            comActLog.LogWrite("[XPUSHPROVIDER]" + "접속성공");
-        }
-        else
-        {
-            comActLog.LogWrite("[XPUSHPROVIDER]" + "접속실패");
-        }
+        string rcv = sendAuth();
+        comActLog.LogWrite("[XPUSHPROVIDER:RECEIVEAUTH]" + rcv);
     }
 
     public void push(string type, string key, string value)
     {
-        sendPush(type, key, value);
+        string rcv = sendPush(type, key, value);
+        comActLog.LogWrite("[XPUSHPROVIDER:RECEIVEPUSH]" + rcv);
     }
 
-    public void closeSocket()
+    public void shutdown()
     {
+        string rcv = sendBye();
+        comActLog.LogWrite("[XPUSHPROVIDER:RECEIVEBYEC]" + rcv);
+
         providerSocket.Shutdown(SocketShutdown.Both);
         providerSocket.Close();
     }
