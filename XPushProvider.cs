@@ -24,6 +24,13 @@ public class XPushProvider
     // 확장아스키코드사용
     Encoding exASCIIENC = Encoding.GetEncoding(28591);
 
+    //Encoding exASCIIENC = Encoding.GetEncoding(737);
+    //Encoding exASCIIENC = Encoding.GetEncoding("cp949");
+    //Encoding exASCIIENC = Encoding.GetEncoding(51949);
+    //Encoding exASCIIENC = Encoding.GetEncoding("UTF-8");
+    
+    
+
     IPEndPoint serverAddress;
     Socket providerSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
     ActLog comActLog = new ActLog();
