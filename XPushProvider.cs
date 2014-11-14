@@ -14,22 +14,17 @@ using System.Net;
 using System.Net.Sockets;
 
 using Tobe_LOG;
+using System.IO;
 
 /// <summary>
 /// XPushProvider
-/// 
+/// 14. 11. 14
+/// 유종원
 /// </summary>
 public class XPushProvider
 {
-    // 확장아스키코드사용
-    Encoding exASCIIENC = Encoding.GetEncoding(28591);
-
-    //Encoding exASCIIENC = Encoding.GetEncoding(737);
-    //Encoding exASCIIENC = Encoding.GetEncoding("cp949");
-    //Encoding exASCIIENC = Encoding.GetEncoding(51949);
-    //Encoding exASCIIENC = Encoding.GetEncoding("UTF-8");
-    
-    
+    // UTF-8 사용
+    Encoding utf8ENC = Encoding.GetEncoding("UTF-8");
 
     IPEndPoint serverAddress;
     Socket providerSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
@@ -37,6 +32,10 @@ public class XPushProvider
 
     private static Char COL_SEP = (char)0x11; // 데이터간 구분자
     private static Char TERM_CODE = (char)0xff; // 패킷 종료 문자
+
+    private static string ACTIONTYPE_AUTH = "AUTH";
+    private static string ACTIONTYPE_PUSH = "PUSH";
+    private static string ACTIONTYPE_BYEC = "BYEC";
 
     private string id = "id";
     private string pw = "pw";
@@ -46,28 +45,6 @@ public class XPushProvider
         //
         // TODO: 여기에 생성자 논리를 추가합니다.
         //
-    }
-
-    public XPushProvider(string id, string pw)
-    {
-        this.id = id;
-        this.pw = pw;
-    }
-
-    private string getAuthMsg()
-    {
-        string authMsg = "AUTH" + this.id + COL_SEP + this.pw + TERM_CODE;
-        string size = ((authMsg).Length).ToString().PadLeft(6, '0');
-
-        return size + authMsg;
-    }
-
-    private string getPushMsg(string type, string key, string value)
-    {
-        string pushMsg = "PUSH" + type + COL_SEP + key + COL_SEP + value + TERM_CODE;
-        string size = ((pushMsg).Length).ToString().PadLeft(6, '0');
-
-        return size + pushMsg;
     }
 
     private void connectSocket()
@@ -92,28 +69,97 @@ public class XPushProvider
         }
     }
 
-    private string sendMsg(string sendMsg)
+    public XPushProvider(string id, string pw)
+    {
+        this.id = id;
+        this.pw = pw;
+    }
+
+    private string sendAuth()
     {
         try
         {
-            byte[] sendBytes = exASCIIENC.GetBytes(sendMsg);
+            string authMsg = ACTIONTYPE_AUTH + this.id + COL_SEP + this.pw;
+            string recMsg = sendMsg(getXpushPacket(authMsg));
 
-            //테스트용 AUTHidpw
-            //30-30-30-30-31-30-41-55-54-48-69-64-11-70-77-FF
-            string hex = BitConverter.ToString(sendBytes);
-            comActLog.LogWrite(hex);
-            //---------
-            
+            return recMsg;
+        }
+        catch (Exception e)
+        {
+            string strMessage = "[Unexpected exception]" + e.Message;
+            comActLog.ExceptionLogWrite(strMessage);
+
+            return null;
+        }
+    }
+
+    private string sendPush(string type, string key, string value)
+    {
+        try
+        {
+            string pushMsg = ACTIONTYPE_PUSH + type + COL_SEP + key + COL_SEP + value;
+            string recMsg = sendMsg(getXpushPacket(pushMsg));
+
+            return recMsg;
+        }
+        catch (Exception e)
+        {
+            string strMessage = "[Unexpected exception]" + e.Message;
+            comActLog.ExceptionLogWrite(strMessage);
+
+            return null;
+        }
+    }
+
+    private string sendBye()
+    {
+        try
+        {
+            string byeMsg = ACTIONTYPE_BYEC;
+            string recMsg = sendMsg(getXpushPacket(byeMsg));
+
+            return recMsg;
+        }
+        catch (Exception e)
+        {
+            string strMessage = "[Unexpected exception]" + e.Message;
+            comActLog.ExceptionLogWrite(strMessage);
+
+            return null;
+        }
+    }
+
+    private string sendKeep()
+    {
+        try
+        {
+            string keepMsg = String.Empty;
+            string recMsg = sendMsg(getXpushPacket(keepMsg));
+
+            return recMsg;
+        }
+        catch (Exception e)
+        {
+            string strMessage = "[Unexpected exception]" + e.Message;
+            comActLog.ExceptionLogWrite(strMessage);
+
+            return null;
+        }
+    }
+
+    private string sendMsg(byte[] sendBytes)
+    {
+        try
+        {
             // 메시지 전송
             int iSent = providerSocket.Send(sendBytes);
-            
+
             // 응답
             byte[] recBytes = new byte[1024];
             int iRec = providerSocket.Receive(recBytes);
-            
-            string recMsg = exASCIIENC.GetString(recBytes, 0, iRec);
-            //comActLog.LogWrite("[XPUSHPROVIDER:RECEIVE]" + recMsg);
 
+            string recMsg = utf8ENC.GetString(recBytes, 0, iRec);
+            
             return recMsg;
         }
         catch (SocketException se)
@@ -133,37 +179,24 @@ public class XPushProvider
         }
     }
 
-    private string sendAuth()
+    private byte[] getXpushPacket(string msg)
     {
-        string authMsg = getAuthMsg();
-        comActLog.LogWrite("[XPUSHPROVIDER:SENDAUTH]" + authMsg);
+        byte[] msgBytes = utf8ENC.GetBytes(msg);
 
-        string recMsg = sendMsg(authMsg);
+        //메시지 사이즈 ex)000010
+        int msgSize = msgBytes.Length + 1; //종료문자 + 1
+        byte[] sizeBytes = utf8ENC.GetBytes((msgSize).ToString().PadLeft(6, '0'));
 
-        return recMsg;
-    }
+        byte[] bytes = new byte[sizeBytes.Length + msgBytes.Length + 1];
 
-    private string sendPush(string type, string key, string value)
-    {
-        string pushMsg = getPushMsg(type, key, value);
-        comActLog.LogWrite("[XPUSHPROVIDER:SENDPUSH]" + pushMsg);
+        Array.Copy(sizeBytes, bytes, sizeBytes.Length);
+        Array.Copy(msgBytes, 0, bytes, sizeBytes.Length, msgBytes.Length);
+        bytes[bytes.Length - 1] = Convert.ToByte(TERM_CODE);
 
-        string recMsg = sendMsg(getPushMsg(type, key, value));
-        
-        return recMsg;
-    }
+        //로그
+        comActLog.LogWrite(BitConverter.ToString(bytes));
 
-    private string sendBye()
-    {
-        string byeMsg = "BYEC" + TERM_CODE;
-        string size = ((byeMsg).Length).ToString().PadLeft(6, '0');
-        byeMsg = size + byeMsg;
-
-        comActLog.LogWrite("[XPUSHPROVIDER:SENDBYEC]" + byeMsg);
-
-        string recMsg = sendMsg(byeMsg);
-
-        return recMsg;
+        return bytes;
     }
 
     public void connect()
