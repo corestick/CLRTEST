@@ -1,0 +1,138 @@
+.NET 의 KoreanLunisolarCalendar 클래스를 이용해서
+
+음력을 계산 하는 SQL함수를 만들기 
+
+ 
+
+CLR 데이터베이스 프로젝트를 만든뒤 사용중인 DB에 배포 해서
+
+SQL 함수로 사용
+
+ 
+
+1. .NET 에서 C# 데이터베이스 CLR 프로젝트 생성
+
+ 
+
+http://msdn.microsoft.com/ko-kr/library/84b1se47(v=vs.90).aspx
+
+ 
+
+2. 만들 데이터베이스 개체 선택
+
+(여기선 사용자 정의 함수 사용)
+
+ 
+
+http://msdn.microsoft.com/ko-kr/library/w2kae45k(v=vs.90).aspx
+
+ 
+
+3. 사용중인 SQL 연결 설정 해주기
+
+ 
+
+4. 필요한 클래스 생성하기.
+
+ * 음력->양력 변환 클래스
+
+ 
+
+using System;
+using System.Data;
+using System.Data.SqlClient;
+using System.Data.SqlTypes;
+using Microsoft.SqlServer.Server;
+using System.Globalization;
+
+public partial class UserDefinedFunctions
+{
+    [Microsoft.SqlServer.Server.SqlFunction]
+    public static SqlDateTime Udf_Lunar2Solar(SqlDateTime sDt)
+    {
+        DateTime dt = (DateTime)sDt;
+        bool bExistLeap = false;
+
+        KoreanLunisolarCalendar kr_Lunar = new KoreanLunisolarCalendar();
+        int _lunnarYY = dt.Year;
+        int _lunnarMM = dt.Month;
+        int _lunnarDD = dt.Day;
+
+        int _leapMonth;
+
+        if (kr_Lunar.GetMonthsInYear(_lunnarYY) > 12)
+        {
+            bExistLeap = kr_Lunar.IsLeapMonth(_lunnarYY, _lunnarMM);
+            _leapMonth = kr_Lunar.GetLeapMonth(_lunnarYY);
+            if (bExistLeap)
+                _lunnarMM++;
+            if (_lunnarMM > _leapMonth)
+                _lunnarMM++;
+
+        }
+
+        return kr_Lunar.ToDateTime(_lunnarYY, _lunnarMM, _lunnarDD, 0, 0, 0, 0);
+    }
+};
+
+ 
+
+5. sql 에서 설정 바꿔주기
+
+ 
+
+SET NOCOUNT ON;
+
+USE master;
+
+EXEC sp_configure 'clr enabled', 1;
+
+RECONFIGURE;
+
+GO
+
+ 
+
+위에 에러 나면
+
+ 
+
+SET NOCOUNT ON;
+USE master;
+exec sp_configure 'allow updates', '0'
+EXEC sp_configure 'clr enabled', 1;
+RECONFIGURE;
+GO
+
+ 
+
+6. 빌드 후 배포
+
+- 배포하면 선택된 디비에 어셈블리에 추가됨
+
+ 
+
+7. 함수 생성 후 테스트
+
+ 
+
+CREATE FUNCTION UFN_Lunar2Solar (@sDt as DATETIME)
+RETURNS DateTime
+AS EXTERNAL NAME UDF_Lunar2Solar.UserDefinedFunctions.Udf_Lunar2Solar
+GO
+
+ 
+
+ 
+
+8. 수정해서 배포시 삭제 후 해야 되는데 삭제는 
+
+ 
+
+drop function UFN_Lunar2Solar
+drop function Udf_Lunar2Solar
+drop assembly Udf_Lunar2Solar
+
+ 
+
+이런식으로 순서대로 삭제 해주면 됨.

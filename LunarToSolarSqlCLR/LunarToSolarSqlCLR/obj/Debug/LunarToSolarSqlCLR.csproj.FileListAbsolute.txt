@@ -1,0 +1,5 @@
+D:\GitHub\ryuTest\LunarToSolarSqlCLR\LunarToSolarSqlCLR\obj\Debug\ResolveAssemblyReference.cache
+D:\GitHub\ryuTest\LunarToSolarSqlCLR\LunarToSolarSqlCLR\bin\Debug\UDF_Lunar2Solar.dll
+D:\GitHub\ryuTest\LunarToSolarSqlCLR\LunarToSolarSqlCLR\bin\Debug\UDF_Lunar2Solar.pdb
+D:\GitHub\ryuTest\LunarToSolarSqlCLR\LunarToSolarSqlCLR\obj\Debug\UDF_Lunar2Solar.dll
+D:\GitHub\ryuTest\LunarToSolarSqlCLR\LunarToSolarSqlCLR\obj\Debug\UDF_Lunar2Solar.pdb
